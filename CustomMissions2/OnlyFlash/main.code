@@ -1,0 +1,132 @@
+# OnlyFlash: notifications, payday RP and visiting fans.
+# The OnlyFlash plugin (BepInEx\plugins\OnlyFlash.dll) does the rest: camera, app, simulation, AI.
+
+fv_main = CreateThread("fv_main")
+fv_main:
+	thread = _this
+	fvchat = CreateMessengerChat("OnlyFlash", iconcolor = Color(0,0.69,0.94), icontext = "OF", icontextcolor = Color(1,1,1))
+	fvSex = CreateCondition("Action_Sex")
+	visit = null
+	thread.Goto("fv_init")
+
+	fv_tick:
+		# Notifications from the app (comments, subscribers, star fan messages, payday)
+		fvn = OnlyFlashPollNotice()
+		while fvn != null
+			fvchat.Add(fvn.text, "Left", user=fvn.user, silent=false)
+			fvn = OnlyFlashPollNotice()
+
+		# Payday when arriving home
+		fvpay = OnlyFlashPollPayout()
+		if fvpay > 0
+			AddCurrentRP(fvpay)
+
+		# Visiting fans
+		if visit == null
+			if _state.Position.stage != "Apart"
+				fvv = OnlyFlashNextVisit()
+				if fvv != null
+					fvspawn = fv_point_between(100, 1225)
+					fvnpc = CreateNPC(fvv.type, position=fvspawn, body=fvv.body, hair=fvv.hair, face=fvv.face, size=fvv.size)
+					if fvnpc != null
+						fvnpc.CanGameOver(false)
+						fvnpc.SkipStrangeness(true)
+						fvnpc.TracePlayer(true)
+						visit = CreateList(id=fvv.vid, npc=fvnpc, spawn=fvspawn, t=0, phase="walking", sexSeen=false, check=0, stuck=0, lastd2=999999)
+						OnlyFlashVisitEvent(fvv.vid, "spawned")
+						Log("[OnlyFlash] " + fvv.name + " spawned and is walking over")
+					else
+						OnlyFlashVisitEvent(fvv.vid, "lost")
+		else
+			visit.t = visit.t + _timediff
+			if _stagechanged || !visit.npc.IsAlive()
+				OnlyFlashVisitEvent(visit.id, "lost")
+				visit = null
+			elseif visit.phase == "walking"
+				fvp = visit.npc.GetPosition()
+				fvdx = fvp.x - _state.Position.x
+				fvdz = fvp.z - _state.Position.z
+				fvd2 = fvdx * fvdx + fvdz * fvdz
+				if fvd2 < 2.6
+					visit.npc.TracePlayer(false)
+					visit.npc.Stopped(true)
+					visit.phase = "asking"
+					OnlyFlashVisitEvent(visit.id, "arrived")
+				elseif visit.t > 150
+					visit.npc.TracePlayer(false)
+					visit.npc.AddWaypoint(visit.spawn, last=true)
+					OnlyFlashVisitEvent(visit.id, "lost")
+					visit = null
+				else
+					# Stuck check every 4 s: retry walking straight to her, then warp closer
+					visit.check = visit.check + _timediff
+					if visit.check > 4
+						visit.check = 0
+						if fvd2 > visit.lastd2 - 1 || fvd2 > 3600
+							visit.stuck = visit.stuck + 1
+							if visit.stuck >= 3 || fvd2 > 3600
+								visit.npc.Warp(position=fv_point_between(16, 81))
+								visit.npc.TracePlayer(true)
+								visit.stuck = 0
+								Log("[OnlyFlash] visitor was stuck, moved closer")
+							else
+								visit.npc.ClearWaypoints()
+								visit.npc.AddWaypoint(CreateList(stage=_state.Position.stage, x=_state.Position.x, y=_state.Position.y, z=_state.Position.z))
+								visit.npc.TracePlayer(true)
+						else
+							visit.stuck = 0
+						visit.lastd2 = fvd2
+			elseif visit.phase == "asking"
+				fvdec = OnlyFlashVisitDecision(visit.id)
+				if fvdec == "accept"
+					visit.npc.Stopped(false)
+					visit.npc.ActivateSex()
+					visit.phase = "sex"
+					visit.t = 0
+				elseif fvdec == "decline"
+					visit.npc.Stopped(false)
+					visit.npc.AddWaypoint(visit.spawn, last=true)
+					OnlyFlashVisitEvent(visit.id, "declined")
+					visit = null
+			elseif visit.phase == "sex"
+				if fvSex.Check()
+					visit.sexSeen = true
+				elseif visit.sexSeen || visit.t > 8
+					if visit.sexSeen
+						OnlyFlashVisitEvent(visit.id, "done")
+					else
+						OnlyFlashVisitEvent(visit.id, "nosex")
+					visit.npc.Stopped(false)
+					visit.npc.AddWaypoint(visit.spawn, last=true)
+					visit = null
+
+	fv_init:
+		Log("[OnlyFlash] script running")
+		listener = CreateListener("fv_tick")
+
+
+# Pick a walkable waypoint whose squared distance from her is between the two arguments
+# (100..1225 = 10-35 m for spawning, 16..81 = 4-9 m when un-sticking a visitor)
+fv_point_between:
+	fvs_min = _args[0]
+	fvs_max = _args[1]
+	fvs_px = _state.Position.x
+	fvs_pz = _state.Position.z
+	fvs_wps = GetAllWaypoints()
+	fvs_cands = CreateList()
+	fvs_i = 0
+	fvs_n = 0
+	if fvs_wps != null
+		fvs_n = fvs_wps.Count()
+	while fvs_i < fvs_n
+		fvs_wp = fvs_wps[fvs_i].Position
+		fvs_dx = fvs_wp.x - fvs_px
+		fvs_dz = fvs_wp.z - fvs_pz
+		fvs_d2 = fvs_dx * fvs_dx + fvs_dz * fvs_dz
+		if fvs_d2 > fvs_min && fvs_d2 < fvs_max
+			fvs_cands.Insert(fvs_wp)
+		fvs_i += 1
+	if fvs_cands.Count() > 0
+		_result = fvs_cands[RandomInt(0, fvs_cands.Count())]
+	else
+		_result = CreateList(stage=_state.Position.stage, x=fvs_px + 6, y=_state.Position.y, z=fvs_pz + 6)
