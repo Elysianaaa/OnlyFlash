@@ -409,9 +409,10 @@ public class VaultWindow : Window
 
 public class HomeWindow : VaultWindow
 {
-    private readonly TextMeshProUGUI stats;
+    private readonly TextMeshProUGUI stats, aiStatus;
     private TextMeshProUGUI msgButtonText;
     private float timer;
+    private static bool testing;
 
     public HomeWindow() : base("OnlyFlash")
     {
@@ -437,6 +438,8 @@ public class HomeWindow : VaultWindow
                 Refresh();
             }, 6f);
         }
+        aiStatus = Ui.WrapRow(c, "", 5.5f, Ui.Ink, Ui.Card);
+        Ui.Button(c, "Test AI fans", 10f, new Color(0.85f, 0.83f, 0.88f), Ui.Ink, TestAi, 5.5f);
         Ui.Button(c, "Reset OnlyFlash...", 10f, new Color(0.85f, 0.83f, 0.88f), Ui.Ink, () => PluginGUI.ShowWindow(new ResetWindow()), 5.5f);
         Ui.WrapRow(c, $"<size=80%>Press <b>{Plugin.CameraKey.Value}</b> outside to open the camera. Photos land in your Camera Roll; post them publicly or to a paid tier. Subscribers pay you when you get home safely.</size>", 5.5f, Ui.Muted, Ui.Bg);
         Refresh();
@@ -457,6 +460,50 @@ public class HomeWindow : VaultWindow
         stats.text = sb.ToString();
         int unread = Store.D.Stars.Count(s => s.Unread);
         if (msgButtonText != null) msgButtonText.text = unread > 0 ? $"Messages  <b>({unread} new)</b>" : "Messages";
+        string ai = AiStatus();
+        if (aiStatus != null && aiStatus.text != ai) { aiStatus.text = ai; Ui.Rebuild(content); }
+    }
+
+    private static string AiStatus()
+    {
+        string s;
+        if (!Plugin.AiEnabled.Value) s = "off - fans use canned comments";
+        else if (!Ai.Configured) s = "<color=#d0305a>not set up</color> - add your AI settings in BepInEx\\config\\OnlyFlash.cfg (see the mod page)";
+        else if (Ai.Problem != null) s = "<color=#d0305a>not working</color> - " + Ui.Esc(Ai.Problem);
+        else s = Ui.Esc(Ai.Describe());
+        return $"<size=85%><b>AI fans:</b> {s}</size>";
+    }
+
+    // One tiny request so players can see right away whether their AI settings work, and why not
+    private static void TestAi()
+    {
+        if (testing) return;
+        if (!Ai.Configured)
+        {
+            OnlyFlashBehaviour.ToastFromOutside("AI fans are not set up", Plugin.AiEnabled.Value
+                ? "Add your AI settings in BepInEx\\config\\OnlyFlash.cfg (see the mod page), then restart the game."
+                : "AI is switched off ([AI] Enabled = false in OnlyFlash.cfg).");
+            return;
+        }
+        testing = true;
+        OnlyFlashBehaviour.ToastFromOutside("Testing AI fans...", Ui.Esc(Ai.Describe()));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        System.Threading.Tasks.Task.Run(async () =>
+        {
+            string title, detail;
+            try
+            {
+                string reply = Ai.Trunc(await Ai.Chat("You are a fan of M-chan, texting her. Answer in one short sentence.", "Say hi to M-chan.", 300), 90);
+                title = "AI fans work!";
+                detail = $"{Ui.Esc(Ai.Describe())} answered in {sw.Elapsed.TotalSeconds:0.0} s" + (reply != "" ? $": \"{Ui.Esc(reply)}\"" : "");
+            }
+            catch (Exception e)
+            {
+                title = "AI fans failed - using canned replies";
+                detail = Ui.Esc(Ai.Explain(e));
+            }
+            Sim.MainThread.Enqueue(() => { testing = false; OnlyFlashBehaviour.ToastFromOutside(title, detail); });
+        });
     }
 
     protected override void Shown() => Refresh();

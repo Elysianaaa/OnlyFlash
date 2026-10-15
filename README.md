@@ -24,7 +24,31 @@ Both AI parts are just settings in the config, so when better open models come o
 ## Install
 1. Install BepInEx 6 (IL2CPP, be.788) and Custom Missions 2.
 2. Download `OnlyFlash.zip` from Releases and extract it into the game folder (it contains `BepInEx\plugins\OnlyFlash.dll`, `BepInEx\plugins\PhotoMode.dll` and `CustomMissions2\OnlyFlash\`).
-3. Start the game once, then set your AI settings in `BepInEx\config\OnlyFlash.cfg` (`ApiUrl`, `ApiKey`, `Model`; and `[AI Judge]` for Ollama).
+3. Start the game once, then set your AI settings in `BepInEx\config\OnlyFlash.cfg` (`ApiUrl`, `ApiKey`, `Model`; and `[AI Judge]` for Ollama). See **AI setup** below.
+4. In game, open OnlyFlash (**H**) and press **Test AI fans**. It tells you straight away whether your AI works, and if not, why.
+
+## AI setup
+The `[AI]` settings are blank on purpose: blank means NovelAI with the `glm-4-6` model. Pick one of these:
+
+**A. NovelAI (paid plan)**
+```
+ApiKey = your Persistent API Token (NovelAI > Account Settings > Get Persistent API Token)
+```
+Leave `ApiUrl` and `Model` blank. **The NovelAI free trial does not work in mods**: NovelAI only lets trial accounts generate on its own website (you get `Recaptcha token is required for trial generations`). Any paid plan works.
+
+**B. Free, on your own PC with Ollama** (the same Ollama the AI Judge uses)
+```
+ApiUrl = http://localhost:11434/v1/chat/completions
+ApiKey =
+Model = qwen2.5vl:7b
+```
+`qwen2.5vl:7b` is the judge's model, so there's nothing extra to download and Ollama doesn't have to swap models. Its comments are tamer than NovelAI's. With a big GPU you can pull a bigger or less filtered text model instead (`ollama pull <name>`) and put its name in `Model`.
+
+**C. Anything else that speaks the OpenAI chat API** (OpenRouter, LM Studio, koboldcpp, ...): put its chat completions URL, key and model name in the three settings.
+
+Restart the game after changing the config.
+
+**Still canned comments?** Press **Test AI fans** in the app, or look for lines starting with `OnlyFlash AI:` in `BepInEx\LogOutput.log`. They say what went wrong in plain words (wrong key, model not downloaded, Ollama not running, too slow, and so on). If a local model is slow, raise `TimeoutSeconds`.
 
 ## Building from source
 .NET SDK 6+. Set `GameDir` in the `.csproj` files to your game folder (it references the BepInEx interop assemblies), then `dotnet build -c Release`.

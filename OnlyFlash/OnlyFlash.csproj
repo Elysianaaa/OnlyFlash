@@ -26,6 +26,6 @@
     <Reference Include="$(GameDir)\BepInEx\interop\Unity.Postprocessing.Runtime.dll" Private="false" />
     <Reference Include="$(GameDir)\BepInEx\interop\Assembly-CSharp.dll" Private="false" />
     <Reference Include="$(GameDir)\BepInEx\plugins\SFM_custom_mission_v2.dll" Private="false" />
-    <Reference Include="..\PhotoMode_src\bin\Release\net6.0\PhotoMode.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\plugins\PhotoMode.dll" Private="false" />
   </ItemGroup>
 </Project>

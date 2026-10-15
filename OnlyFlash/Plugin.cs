@@ -20,7 +20,7 @@ using InGameMenuView = ExposureUnnoticed2.ObjectUI.InGameMenu.InGameMenuView;
 
 namespace OnlyFlash;
 
-[BepInPlugin("OnlyFlash", "OnlyFlash", "1.1.0")]
+[BepInPlugin("OnlyFlash", "OnlyFlash", "1.1.1")]
 [BepInDependency("SFM_custom_mission_v2", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("PhotoMode", BepInDependency.DependencyFlags.HardDependency)]
 public class Plugin : BasePlugin
@@ -33,7 +33,7 @@ public class Plugin : BasePlugin
     internal static ConfigEntry<bool> ShowInGallery, SpontaneousVisits, AiEnabled, LogPrompts;
     internal static ConfigEntry<float> EngagementMinutes, VisitCheckMinutes, Temperature, PhoneScale, DmMinGapMinutes;
     internal static ConfigEntry<bool> FanDms, NewContacts;
-    internal static ConfigEntry<int> MaxAutoContacts, VisionTimeout;
+    internal static ConfigEntry<int> MaxAutoContacts, VisionTimeout, AiTimeout;
     internal static ConfigEntry<bool> VisionEnabled;
     internal static ConfigEntry<string> VisionUrl, VisionModel;
 
@@ -50,11 +50,12 @@ public class Plugin : BasePlugin
         VisitCheckMinutes = Config.Bind("Visits", "VisitCheckMinutes", 4f, "How often (real minutes, while outside) star fans consider coming to you on their own.");
         SpontaneousVisits = Config.Bind("Visits", "SpontaneousVisits", true, "Allow star fans to come to you without being invited.");
         AiEnabled = Config.Bind("AI", "Enabled", true, "Use AI for comments and chats. Off = simple canned comments.");
-        ApiUrl = Config.Bind("AI", "ApiUrl", "", "Leave empty to use the settings from FansChatAI.cfg.");
-        ApiKey = Config.Bind("AI", "ApiKey", "", "Leave empty to use the key from FansChatAI.cfg.");
-        Model = Config.Bind("AI", "Model", "", "Leave empty to use the model from FansChatAI.cfg.");
+        ApiUrl = Config.Bind("AI", "ApiUrl", "", "Any OpenAI-style chat URL. Empty = NovelAI (https://text.novelai.net/oa/v1/chat/completions), or the one in FansChatAI.cfg if you have it.\nFree local AI with Ollama: http://localhost:11434/v1/chat/completions");
+        ApiKey = Config.Bind("AI", "ApiKey", "", "NovelAI: Account Settings > Get Persistent API Token. Needs a PAID NovelAI plan: free trial accounts are blocked outside the NovelAI website.\nNot needed for Ollama. Empty = the key from FansChatAI.cfg if you have it.");
+        Model = Config.Bind("AI", "Model", "", "Empty = glm-4-6 (NovelAI), or the model in FansChatAI.cfg if you have it.\nOllama: the name of a model you pulled, e.g. qwen2.5vl:7b (the AI Judge's model works for fans too, no extra download).");
         Temperature = Config.Bind("AI", "Temperature", 1.0f, "Higher = wilder replies.");
         LogPrompts = Config.Bind("AI", "LogPrompts", false, "Write prompts and AI output to the BepInEx log.");
+        AiTimeout = Config.Bind("AI", "TimeoutSeconds", 90, "Give up on an AI reply after this long. Local models need longer while they load.");
         PhoneScale = Config.Bind("Phone", "PhoneScale", 1.6f, "How much bigger the phone gets while OnlyFlash is open (1 = normal). Automatically limited so it fits the screen.");
         ScrollStep = Config.Bind("Phone", "ScrollStep", 0.1f, "How far one mouse-wheel notch scrolls OnlyFlash lists, as a share of the visible list (0.1 = a tenth of the screen).");
         SkipOnDayNight = Config.Bind("Simulation", "SkipOnDayNightChange", 180f, "When day turns to night or back in the game (killing time, sleeping), OnlyFlash skips this many minutes ahead so likes, comments and DMs catch up. 0 = off.");        FanDms = Config.Bind("Messages", "FanDms", true, "Star fans text you on their own (reactions to posts, flirting, requests, check-ins).");
@@ -77,7 +78,7 @@ public class Plugin : BasePlugin
         App = new OnlyFlashApp();
         PluginGUI.RegisterApp(App);
         AddComponent<OnlyFlashBehaviour>();
-        Logger.LogInfo($"OnlyFlash loaded: {Store.D.Photos.Count} photos, {Store.D.Posts.Count} posts, {Store.D.Stars.Count} star fans, AI {(Ai.Available ? "on" : "off")}");
+        Logger.LogInfo($"OnlyFlash loaded: {Store.D.Photos.Count} photos, {Store.D.Posts.Count} posts, {Store.D.Stars.Count} star fans, AI {(Ai.Configured ? "on (" + Ai.Describe() + ")" : "off")}");
     }
 
     private static ProgramValue PollNotice(ProgramVariables p, ProgramThreadBase t)
